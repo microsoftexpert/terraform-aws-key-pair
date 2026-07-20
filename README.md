@@ -16,7 +16,7 @@
 - 🔒 **Public-key-only by design.** The module accepts `public_key` and emits **no secret**. The matching private key is generated and held by the caller — it never enters this module, never goes to AWS, and never lands in Terraform state.
 - 🚫 **Weak algorithm rejected.** Variable validation refuses DSA (`ssh-dss`) keys — below the cryptographic baseline and unsupported by EC2. Accepted types are **RSA (2048/4096-bit)** and **ED25519** (ED25519 is not usable by Windows instances).
 - 🏷️ **Flexible identity.** Set an explicit `key_name`, a server-generated `key_name_prefix` (collision-free), or neither (Terraform generates a unique name) — all three are mutually validated and **FORCE-NEW**.
-- 🔗 Emits `id` (the key name), `arn`, `key_pair_id` (`key-...`), `key_type`, and `fingerprint` for clean wiring into `tf-mod-aws-ec2-instance`, `tf-mod-aws-launch-template`, and `tf-mod-aws-autoscaling-group`.
+- 🔗 Emits `id` (the key name), `arn`, `key_pair_id` (`key-...`), `key_type`, and `fingerprint` for clean wiring into `terraform-aws-ec2-instance`, `terraform-aws-launch-template`, and `terraform-aws-autoscaling-group`.
 
 > 💡 **Why it matters:** An SSH key pair is a credential boundary. Keeping the private key entirely out of state — and refusing weak algorithms at plan time — is the single most important secure default a key-pair module can enforce. The hardened posture is the *default*, not a per-team checklist.
 
@@ -36,15 +36,15 @@ Whether it's a star, a professional connection, or a coffee, every gesture helps
 
 ## 🗺️ Where this fits in the family
 
-`tf-mod-aws-key-pair` is a **standalone identity primitive** — it has no upstream `tf-mod-*` dependency (the public key material is supplied directly by the caller, outside Terraform) and is consumed **by name** (`key_name`) by anything that launches EC2 instances.
+`terraform-aws-key-pair` is a **standalone identity primitive** — it has no upstream `terraform-*` dependency (the public key material is supplied directly by the caller, outside Terraform) and is consumed **by name** (`key_name`) by anything that launches EC2 instances.
 
 ```mermaid
 flowchart LR
  CALLER["Caller-supplied public key<br/>(ssh-keygen, out of suite)"]
- THIS["tf-mod-aws-key-pair<br/>(THIS MODULE)"]
- EC2["tf-mod-aws-ec2-instance"]
- LT["tf-mod-aws-launch-template"]
- ASG["tf-mod-aws-autoscaling-group<br/>(via launch template)"]
+ THIS["terraform-aws-key-pair<br/>(THIS MODULE)"]
+ EC2["terraform-aws-ec2-instance"]
+ LT["terraform-aws-launch-template"]
+ ASG["terraform-aws-autoscaling-group<br/>(via launch template)"]
 
  CALLER -->|"public_key"| THIS
  THIS -->|"id / key_name"| EC2
@@ -54,7 +54,7 @@ flowchart LR
  style THIS fill:#FF9900,color:#fff,stroke:#cc7a00,stroke-width:2px
 ```
 
-This module **consumes** only a caller-supplied public key (no upstream `tf-mod-*`); it **emits** `id` / `key_name` for instance and launch-template wiring — see the [Typical wiring](#-typical-wiring) table.
+This module **consumes** only a caller-supplied public key (no upstream `terraform-*`); it **emits** `id` / `key_name` for instance and launch-template wiring — see the [Typical wiring](#-typical-wiring) table.
 
 ---
 
@@ -64,7 +64,7 @@ A single `aws_key_pair` resource that imports caller-supplied public-key materia
 
 ```mermaid
 flowchart TD
- subgraph mod["tf-mod-aws-key-pair"]
+ subgraph mod["terraform-aws-key-pair"]
  THIS["aws_key_pair.this<br/>(keystone)<br/>imports public_key; emits id/arn/key_pair_id/fingerprint"]
  end
 
@@ -80,7 +80,7 @@ flowchart TD
 ## 📁 Module Structure
 
 ```
-tf-mod-aws-key-pair/
+terraform-aws-key-pair/
 ├── providers.tf # terraform >= 1.12, aws >= 6.0 < 7.0 (no provider{} block)
 ├── variables.tf # key_name, key_name_prefix, public_key (required), tags
 ├── main.tf # aws_key_pair.this
@@ -97,7 +97,7 @@ Smallest working call — register a named public key:
 
 ```hcl
 module "bastion_key" {
-  source = "git::https://github.com/microsoftexpert/tf-mod-aws-key-pair?ref=v1.0.0"
+  source = "git::https://github.com/microsoftexpert/terraform-aws-key-pair?ref=v1.0.0"
 
   key_name   = "bastion-prod"
   public_key = file("${path.module}/keys/bastion-prod.pub")
@@ -113,7 +113,7 @@ Wire it into an instance (`key_name` is the cross-resource reference):
 
 ```hcl
 module "bastion" {
-  source   = "git::https://github.com/microsoftexpert/tf-mod-aws-ec2-instance?ref=v1.0.0"
+  source   = "git::https://github.com/microsoftexpert/terraform-aws-ec2-instance?ref=v1.0.0"
   key_name = module.bastion_key.id # == key_name
   #... ami, subnet_id, security_group_ids...
 }
@@ -137,7 +137,7 @@ Least-privilege actions the executing **Terraform identity** needs. This module 
 
 > **Service-linked roles:** `aws_key_pair` creates **no** service-linked role. No `iam:CreateServiceLinkedRole` is required by this module.
 >
-> ℹ️ **No `iam:PassRole`** is involved — a key pair is not an IAM principal and passes no role. (PassRole belongs to the *consuming* `tf-mod-aws-ec2-instance` module's instance profile, not here.)
+> ℹ️ **No `iam:PassRole`** is involved — a key pair is not an IAM principal and passes no role. (PassRole belongs to the *consuming* `terraform-aws-ec2-instance` module's instance profile, not here.)
 
 ---
 
@@ -156,9 +156,9 @@ Least-privilege actions the executing **Terraform identity** needs. This module 
 
 | This module output | Feeds into |
 |---|---|
-| `id` | `tf-mod-aws-ec2-instance` (`key_name`), `tf-mod-aws-launch-template` (`key_name`), `tf-mod-aws-autoscaling-group` (via launch template) — `id` **equals** the key name. |
+| `id` | `terraform-aws-ec2-instance` (`key_name`), `terraform-aws-launch-template` (`key_name`), `terraform-aws-autoscaling-group` (via launch template) — `id` **equals** the key name. |
 | `key_name` | Same consumers as `id`; the explicit name attribute (identical value). |
-| `arn` | `tf-mod-aws-iam-policy` resource ARNs / SCP conditions, AWS Config rules keyed on the key-pair ARN. |
+| `arn` | `terraform-aws-iam-policy` resource ARNs / SCP conditions, AWS Config rules keyed on the key-pair ARN. |
 | `key_pair_id` | AWS Config / EC2 `DescribeKeyPairs` lookups, drift detection keyed on the stable `key-...` id. |
 | `fingerprint` | Out-of-band verification that the registered key matches the caller's local key. |
 | `key_type` | Compliance reporting (e.g. assert no RSA-2048 remains). |
@@ -204,7 +204,7 @@ There are **no in-place-updatable** structural fields and **no `timeouts` block*
 
 ```hcl
 module "key" {
-  source = "git::https://github.com/microsoftexpert/tf-mod-aws-key-pair?ref=v1.0.0"
+  source = "git::https://github.com/microsoftexpert/terraform-aws-key-pair?ref=v1.0.0"
 
   key_name   = "app-prod"
   public_key = file("${path.module}/keys/app-prod.pub")
@@ -217,7 +217,7 @@ module "key" {
 
 ```hcl
 module "key" {
-  source = "git::https://github.com/microsoftexpert/tf-mod-aws-key-pair?ref=v1.0.0"
+  source = "git::https://github.com/microsoftexpert/terraform-aws-key-pair?ref=v1.0.0"
 
   key_name   = "app-prod"
   public_key = file("${path.module}/keys/app-prod.pub")
@@ -238,7 +238,7 @@ module "key" {
 
 ```hcl
 module "key" {
-  source = "git::https://github.com/microsoftexpert/tf-mod-aws-key-pair?ref=v1.0.0"
+  source = "git::https://github.com/microsoftexpert/terraform-aws-key-pair?ref=v1.0.0"
 
   key_name   = "ops-ed25519"
   public_key = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAID...example ops@casey"
@@ -252,7 +252,7 @@ module "key" {
 ```hcl
 # Generate locally: ssh-keygen -t ed25519 -f./keys/linux-fleet
 module "key" {
-  source = "git::https://github.com/microsoftexpert/tf-mod-aws-key-pair?ref=v1.0.0"
+  source = "git::https://github.com/microsoftexpert/terraform-aws-key-pair?ref=v1.0.0"
 
   key_name   = "linux-fleet"
   public_key = file("${path.module}/keys/linux-fleet.pub")
@@ -268,7 +268,7 @@ module "key" {
 ```hcl
 # Generate locally: ssh-keygen -t rsa -b 4096 -f./keys/win-fleet
 module "key" {
-  source = "git::https://github.com/microsoftexpert/tf-mod-aws-key-pair?ref=v1.0.0"
+  source = "git::https://github.com/microsoftexpert/terraform-aws-key-pair?ref=v1.0.0"
 
   key_name   = "win-fleet"
   public_key = file("${path.module}/keys/win-fleet.pub")
@@ -283,7 +283,7 @@ module "key" {
 
 ```hcl
 module "key" {
-  source = "git::https://github.com/microsoftexpert/tf-mod-aws-key-pair?ref=v1.0.0"
+  source = "git::https://github.com/microsoftexpert/terraform-aws-key-pair?ref=v1.0.0"
 
   key_name_prefix = "ephemeral-ci-" # AWS appends a unique suffix
   public_key      = file("${path.module}/keys/ci.pub")
@@ -298,7 +298,7 @@ module "key" {
 
 ```hcl
 module "key" {
-  source = "git::https://github.com/microsoftexpert/tf-mod-aws-key-pair?ref=v1.0.0"
+  source = "git::https://github.com/microsoftexpert/terraform-aws-key-pair?ref=v1.0.0"
 
   public_key = file("${path.module}/keys/scratch.pub")
 }
@@ -316,7 +316,7 @@ data "aws_ssm_parameter" "ops_pubkey" {
 }
 
 module "key" {
-  source = "git::https://github.com/microsoftexpert/tf-mod-aws-key-pair?ref=v1.0.0"
+  source = "git::https://github.com/microsoftexpert/terraform-aws-key-pair?ref=v1.0.0"
 
   key_name   = "ops"
   public_key = data.aws_ssm_parameter.ops_pubkey.value
@@ -331,7 +331,7 @@ module "key" {
 
 ```hcl
 module "key" {
-  source = "git::https://github.com/microsoftexpert/tf-mod-aws-key-pair?ref=v1.0.0"
+  source = "git::https://github.com/microsoftexpert/terraform-aws-key-pair?ref=v1.0.0"
 
   key_name   = "audited"
   public_key = file("${path.module}/keys/audited.pub")
@@ -350,10 +350,10 @@ An EC2 key pair stores **only a public key** — there is no private material, n
 
 ```hcl
 # No kms_key_arn here — intentionally. The customer-managed-KMS pattern
-# applies to data-bearing modules (tf-mod-aws-s3-bucket, tf-mod-aws-rds,
-# tf-mod-aws-ebs-volume), not to a public-key registration.
+# applies to data-bearing modules (terraform-aws-s3-bucket, terraform-aws-rds,
+# terraform-aws-ebs-volume), not to a public-key registration.
 module "key" {
-  source     = "git::https://github.com/microsoftexpert/tf-mod-aws-key-pair?ref=v1.0.0"
+  source     = "git::https://github.com/microsoftexpert/terraform-aws-key-pair?ref=v1.0.0"
   key_name   = "app"
   public_key = file("${path.module}/keys/app.pub")
 }
@@ -372,7 +372,7 @@ resource "tls_private_key" "ephemeral" {
 }
 
 module "key" {
-  source = "git::https://github.com/microsoftexpert/tf-mod-aws-key-pair?ref=v1.0.0"
+  source = "git::https://github.com/microsoftexpert/terraform-aws-key-pair?ref=v1.0.0"
 
   key_name   = "throwaway-ephemeral"
   public_key = tls_private_key.ephemeral.public_key_openssh
@@ -388,7 +388,7 @@ module "key" {
 
 ```hcl
 module "bastion_key" {
-  source = "git::https://github.com/microsoftexpert/tf-mod-aws-key-pair?ref=v1.0.0"
+  source = "git::https://github.com/microsoftexpert/terraform-aws-key-pair?ref=v1.0.0"
 
   key_name   = "bastion-prod"
   public_key = file("${path.module}/keys/bastion-prod.pub")
@@ -396,9 +396,9 @@ module "bastion_key" {
 }
 
 module "bastion" {
-  source   = "git::https://github.com/microsoftexpert/tf-mod-aws-ec2-instance?ref=v1.0.0"
+  source   = "git::https://github.com/microsoftexpert/terraform-aws-ec2-instance?ref=v1.0.0"
   key_name = module.bastion_key.id # the key pair name
-  #... ami, subnet_id (tf-mod-aws-vpc), security_group_ids (tf-mod-aws-security-group)...
+  #... ami, subnet_id (terraform-aws-vpc), security_group_ids (terraform-aws-security-group)...
 }
 ```
 
@@ -410,14 +410,14 @@ module "bastion" {
 
 ```hcl
 module "fleet_key" {
-  source = "git::https://github.com/microsoftexpert/tf-mod-aws-key-pair?ref=v1.0.0"
+  source = "git::https://github.com/microsoftexpert/terraform-aws-key-pair?ref=v1.0.0"
 
   key_name   = "web-fleet"
   public_key = file("${path.module}/keys/web-fleet.pub")
 }
 
 module "web_lt" {
-  source   = "git::https://github.com/microsoftexpert/tf-mod-aws-launch-template?ref=v1.0.0"
+  source   = "git::https://github.com/microsoftexpert/terraform-aws-launch-template?ref=v1.0.0"
   key_name = module.fleet_key.id
   #... image_id, instance_type...
 }
@@ -438,14 +438,14 @@ provider "aws" {
 }
 
 module "key_use1" {
-  source     = "git::https://github.com/microsoftexpert/tf-mod-aws-key-pair?ref=v1.0.0"
+  source     = "git::https://github.com/microsoftexpert/terraform-aws-key-pair?ref=v1.0.0"
   providers  = { aws = aws.use1 }
   key_name   = "ops"
   public_key = file("${path.module}/keys/ops.pub")
 }
 
 module "key_usw2" {
-  source     = "git::https://github.com/microsoftexpert/tf-mod-aws-key-pair?ref=v1.0.0"
+  source     = "git::https://github.com/microsoftexpert/terraform-aws-key-pair?ref=v1.0.0"
   providers  = { aws = aws.usw2 }
   key_name   = "ops"
   public_key = file("${path.module}/keys/ops.pub")
@@ -508,7 +508,7 @@ Additional principles:
 ## 🚀 Runbook
 
 ```powershell
-cd C:\GitHubCode\newawsmodules\tf-mod-aws-key-pair
+cd C:\GitHubCode\newawsmodules\terraform-aws-key-pair
 
 terraform init -backend=false
 terraform validate
@@ -543,7 +543,7 @@ terraform fmt -check
 - [Terraform `aws_key_pair` data source](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/key_pair)
 - [AWS — Amazon EC2 key pairs and Amazon EC2 instances](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-key-pairs.html)
 - [AWS — `ImportKeyPair` API](https://docs.aws.amazon.com/AWSEC2/latest/APIReference/API_ImportKeyPair.html)
-- Sibling modules: `tf-mod-aws-ec2-instance`, `tf-mod-aws-launch-template`, `tf-mod-aws-autoscaling-group`
+- Sibling modules: `terraform-aws-ec2-instance`, `terraform-aws-launch-template`, `terraform-aws-autoscaling-group`
 
 ---
 

@@ -1,4 +1,4 @@
-# tf-mod-aws-key-pair — SCOPE
+# terraform-aws-key-pair — SCOPE
 
 Standalone module for a single EC2 key pair. It registers a **caller-supplied
 public key** with AWS so the key pair can be named as `key_name` when launching
@@ -21,8 +21,8 @@ one taggable, public-key-only key pair.
 Referenced by name/id, never created here:
 
 - The EC2 instances / launch templates / ASGs that reference the key pair by
-  `key_name` (handled by `tf-mod-aws-ec2-instance`, `tf-mod-aws-launch-template`,
-  `tf-mod-aws-autoscaling-group`).
+  `key_name` (handled by `terraform-aws-ec2-instance`, `terraform-aws-launch-template`,
+  `terraform-aws-autoscaling-group`).
 - The **private key** — generated and held by the caller (`ssh-keygen`),
   supplied *nowhere* to this module.
 - The public-key source (a local file, SSM parameter, or data source) — read by
